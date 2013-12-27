@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+				<title>Population count per Zip Code</title>
+		<style>
+		
+		.land {
+			fill: #fff;
+		}
+		
+		.county-boundary {
+			fill: none;
+			stroke: #000;
+			stroke-width: .5px;
+		}
+		
+		.state-boundary {
+			fill: none;
+			stroke: #CCC;
+		}
+		
+		.zip-boundary {
+			fill: none;
+			stroke: #CCC;
+			stroke-width: .1px;
+		}
+		
+	</style>
+    </head>
+    <body>
+		<script type="text/javascript" src="../d3/d3.v3.js"></script>
+		<script src="http://d3js.org/topojson.v1.min.js"></script>
+
+		<script type="text/javascript">
+		
+			var width = 960,
+				height = 500;
+
+			d3.select("body").append("h3").attr("class", "zip-boundary").text("Zip-Code Based Census Information");
+				
+			//Define map projection				
+			var projection = d3.geo.albersUsa()
+				.scale(1000)
+				.translate([width / 2, height / 2]);
+
+				
+			//Define path generator
+			var path = d3.geo.path()
+				.projection(projection);
+			
+			
+			//Define quantize scale to sort data values into buckets of color
+			var color = d3.scale.quantize()
+				.range(["rgb(247,251,255)","rgb(222,235,247)","rgb(198,219,239)","rgb(158,202,225)","rgb(107,174,214)", "rgb(66,146,198)", "rgb(33,113,181)", "rgb(8,81,156)", "rgb(8,48,107)"]);
+				//Colors taken from colorbrewer.js, included in the D3 download
+			
+			//Create SVG Element
+			var svg = d3.select("body").append("svg")
+				.attr("width", width)
+				.attr("height", height);
+			
+			//Load in zip code population data
+			d3.csv("zipcode_data.csv", function(data) {
+		
+			
+				//Set input domain for color scale
+				color.domain([
+					d3.min(data, function(d) { return d.Pop2001; }), 
+					d3.max(data, function(d) { return d.Pop2001; })
+				]);
+
+			
+				//Load in zip-code boundary data in TopoJSON format and convert to GeoJSON format
+				d3.json("zips_us_topo.json", function(error, zip) {
+					zip = topojson.feature(zip, zip.objects.zip_codes_for_the_usa);
+					
+					//Merge the zip code population data and GeoJSON
+					//Loop through once for each data value
+					for (var j = 0; j < zip.features.length; j++) {
+
+						//Grab City Name and State from GeoJSON File
+						var jsonCity = zip.features[j].properties.name;		
+						var jsonState = zip.features[j].properties.state;
+
+						LOOP: for (var i = 0; i < data.length; i++) {
+				
+							//Grab state name from data file
+							var dt = data[i];
+							var dataState = dt.State;
+							var dataCity = dt["Po Name"];
+						
+							//Grab data value from data file, and convert from string to float
+//							var dataValue = dt.Area;
+							var dataValue = dt.Pop2001;
+							
+							//Find the corresponding state inside the GeoJSON
+							if (dataState == jsonState) {
+								if (dataCity == jsonCity) {
+								
+									//Copy the data value into the JSON
+									zip.features[j].properties.value = dataValue;
+								
+									//Stop looking through the JSON
+									break LOOP;
+								}
+							}
+						}		
+					}
+
+					//Bind data and create one path per GeoJSON feature
+					svg.selectAll("path")
+					   .data(zip.features)
+					   .enter()
+					   .append("path")
+					   .attr("d", path)
+					   .attr("class", "zip-boundary")
+					   .style("fill", function(d) {
+
+							//Get data value
+					   		var value = d.properties.value;
+							
+					   		if (value) {
+					   			//If value exists…
+								var col = color(value);
+								
+						   		return color(value);
+					   		} else {
+					   			//If value is undefined…
+						   		return "#FFF";
+					   		}
+						})
+						.on("mouseover", function(d,i) {
+							d3.select(this.parentNode.appendChild(this)).transition().duration(300)
+							.style({'stroke':'#000', 'stroke-width':'1px'});
+						})
+						
+						.on("mouseout", function(d) {
+							d3.select(this.parentNode.appendChild(this)).transition().duration(300)
+						.style({'stroke':'#CCC', 'stroke-width':'.1px'});
+						})
+						
+						.append("title")
+							.text(function(d) {
+								return d.properties.value;
+						});
+						
+			
+					
+				})
+			});
+			
+            d3.json("us.json", function(error, us) {			
+//
+//				svg.insert("path", ".graticule")
+//					.datum(topojson.mesh(us, us.objects.counties, function(a,b) {return a !== b && !(a.id / 1000 ^ b.id / 1000); }))
+//					.attr("class", "county-boundary")
+//					.attr("d", path);
+//				
+				svg.insert("path", ".graticule")
+					.datum(topojson.feature(us, us.objects.states, function(a, b) {return a !== b;}))
+					.attr("class", "state-boundary")
+					.attr("d", path);	
+			});
+			
+			d3.select(self.frameElement).style("height", height + "px");
+			
+			
+        </script>
+    </body>
+</html>
